@@ -168,18 +168,6 @@
             isTouch = false;
         });
 
-        // Add click/touch navigation
-        canvas.addEventListener('click', () => {
-            window.location.href = 'https://www.presentfutures.de/main';
-        });
-
-        canvas.addEventListener('touchend', (e) => {
-            // Prevent the click event from firing on touch devices
-            if (e.changedTouches[0].clientX === e.changedTouches[0].screenX) {
-                window.location.href = 'https://www.presentfutures.de/main';
-            }
-        });
-
         const vertexShader = gl.createShader(gl.VERTEX_SHADER);
         gl.shaderSource(vertexShader, `
             attribute vec2 position;
