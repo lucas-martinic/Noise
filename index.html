@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #000;
+        }
+        canvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        /* Scrolling text container */
+        .scroll-container {
+            position: fixed;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            overflow: hidden;
+            background: transparent;
+            padding: 15px 0;
+            z-index: 1000;
+        }
+        
+        .scroll-text {
+            display: inline-block;
+            white-space: nowrap;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: Arial, sans-serif;
+            font-size: 15px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        @keyframes scroll {
+            0% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="scroll-container">
+        <div class="scroll-text">
+            ©2025 PRESENT FUTURES, CHLOÉ LEE UND LUCAS MARTINIC GBR. VIRTUAL REALITY & OTHER IMMERSIVE EXPERIENCES.        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl');
+
+        if (!gl) {
+            alert('WebGL not supported');
+            throw new Error('WebGL not supported');
+        }
+
+        let imageAspectRatio = 1;
+
+        function loadImage(url) {
+            return new Promise((resolve) => {
+                const image = new Image();
+                image.src = url;
+                image.onload = () => {
+                    imageAspectRatio = image.width / image.height;
+                    resolve(image);
+                };
+            });
+        }
+
+        function createTexture(image) {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            
+            // Basic texture setup without premultiplied alpha
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            
+            return texture;
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        let mouseX = 0.5;
+        let mouseY = 0.3;
+        let targetMouseX = 0.5;
+        let targetMouseY = 0.3;
+        let isTouch = false;
+
+        // Handle mouse movement
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isTouch) { // Only respond to mouse if not recently touched
+                targetMouseX = e.clientX / canvas.width;
+                targetMouseY = 1.0 - e.clientY / canvas.height;
+            }
+        });
+
+        // Handle touch events
+        canvas.addEventListener('touchstart', (e) => {
+            isTouch = true;
+            if (e.touches.length > 0) {
+                targetMouseX = e.touches[0].clientX / canvas.width;
+                targetMouseY = 1.0 - e.touches[0].clientY / canvas.height;
+            }
+            e.preventDefault();
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                targetMouseX = e.touches[0].clientX / canvas.width;
+                targetMouseY = 1.0 - e.touches[0].clientY / canvas.height;
+            }
+            e.preventDefault();
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => {
+            // Slowly return to center when touch ends
+            setTimeout(() => {
+                targetMouseX = 0.5;
+                targetMouseY = 0.3;
+            }, 1000);
+        });
+
+        // Handle device orientation
+        if (window.DeviceOrientationEvent) {
+            window.addEventListener('deviceorientation', (e) => {
+                if (isTouch) return; // Don't respond to orientation if actively touching
+                
+                // Convert device orientation to mouse position
+                if (e.beta && e.gamma) {
+                    // Normalize beta between -90 and 90 degrees
+                    const normalizedBeta = Math.max(Math.min(e.beta, 90), -90);
+                    
+                    // Normalize gamma between -90 and 90 degrees
+                    const normalizedGamma = Math.max(Math.min(e.gamma, 90), -90);
+                    
+                    // Convert to values between 0 and 1
+                    targetMouseX = (normalizedGamma + 90) / 180;
+                    targetMouseY = (normalizedBeta + 90) / 180;
+                }
+            });
+        }
+
+        // Reset touch flag when mouse is used
+        canvas.addEventListener('mouseover', () => {
+            isTouch = false;
+        });
+
+        // Add click/touch navigation
+        canvas.addEventListener('click', () => {
+            window.location.href = 'https://www.presentfutures.de/main';
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            // Prevent the click event from firing on touch devices
+            if (e.changedTouches[0].clientX === e.changedTouches[0].screenX) {
+                window.location.href = 'https://www.presentfutures.de/main';
+            }
+        });
+
+        const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader, `
+            attribute vec2 position;
+            varying vec2 vUv;
+            void main() {
+                vUv = position * 0.5 + 0.5;
+                gl_Position = vec4(position, 0.0, 1.0);
+            }
+        `);
+        gl.compileShader(vertexShader);
+
+        const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShader, `
+            precision highp float;
+            uniform vec2 uMouse;
+            uniform float uTime;
+            uniform sampler2D uTexture;
+            uniform vec2 uResolution;
+            uniform float uImageAspect;
+            varying vec2 vUv;
+
+            float random(vec2 st) {
+                return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+            }
+
+            vec2 hash(vec2 p) {
+                p = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));
+                return -1.0 + 2.0*fract(sin(p)*43758.5453123);
+            }
+
+            float noise(vec2 p) {
+                const float K1 = 0.366025404;
+                const float K2 = 0.211324865;
+                
+                vec2 i = floor(p + (p.x+p.y)*K1);
+                vec2 a = p - i + (i.x+i.y)*K2;
+                vec2 o = (a.x>a.y) ? vec2(1.0,0.0) : vec2(0.0,1.0);
+                vec2 b = a - o + K2;
+                vec2 c = a - 1.0 + 2.0*K2;
+                
+                vec3 h = max(0.5-vec3(dot(a,a), dot(b,b), dot(c,c)), 0.0);
+                vec3 n = h*h*h*h*vec3(dot(a,hash(i+0.0)), dot(b,hash(i+o)), dot(c,hash(i+1.0)));
+                
+                return dot(n, vec3(70.0));
+            }
+
+            float circularNoise(vec2 uv, vec2 mouse, float time) {
+                vec2 direction = uv - mouse;
+                float dist = length(direction);
+                float angle = atan(direction.y, direction.x);
+                
+                vec2 noiseCoord = vec2(
+                    dist * 10.0 + cos(angle * 3.0),
+                    angle * 3.0 + time
+                );
+                
+                return random(noiseCoord) * smoothstep(0.5, 0.0, dist);
+            }
+
+            void main() {
+                float screenAspect = uResolution.x / uResolution.y;
+                
+                vec2 aspectUv = vUv - 0.5;
+                aspectUv.y = -(aspectUv.y);
+                
+                float scale = 1.0;
+                if (screenAspect > uImageAspect) {
+                    aspectUv.x *= screenAspect;
+                    aspectUv /= uImageAspect;
+                } else {
+                    aspectUv.x *= screenAspect;
+                }
+                aspectUv *= scale;
+                aspectUv += 0.5;
+
+                float mouseDist = distance(vUv, uMouse);
+                float mouseInfluence = smoothstep(0.5, 0.0, mouseDist);
+
+                vec3 baseColor = vec3(0.02);
+                
+                vec2 waveOffset = (vUv - uMouse) * 0.1;
+                
+                float waveIntensity = 0.01 + mouseInfluence * 0.01;
+                float waveNoise = noise((vUv + waveOffset) * 4.0 + uTime * 0.2);
+                vec3 waveColor = vec3(waveNoise) * 0.04;
+
+                float ripple = sin(mouseDist * 10.0 - uTime * 2.0) * 0.5 + 0.5;
+                ripple *= smoothstep(1.0, 0.0, mouseDist);
+                
+                vec3 backgroundColor = baseColor + waveColor;
+                backgroundColor += vec3(ripple * 0.03 * mouseInfluence);
+
+                float noise = circularNoise(vUv, uMouse, uTime * 0.5) * 0.1;
+                
+                float dist = distance(vUv, uMouse);
+                float angle = atan(vUv.y - uMouse.y, vUv.x - uMouse.x);
+                vec2 offset = vec2(
+                    cos(angle) * noise,
+                    sin(angle) * noise
+                ) * smoothstep(0.5, 0.0, dist);
+                
+                vec2 distortedUv = aspectUv + offset;
+                
+                vec4 texColor = texture2D(uTexture, distortedUv);
+                
+                if (distortedUv.x < 0.0 || distortedUv.x > 1.0 || 
+                    distortedUv.y < 0.0 || distortedUv.y > 1.0) {
+                    gl_FragColor = vec4(backgroundColor, 1.0);
+                } else {
+                    // Handle premultiplied alpha blending
+                    gl_FragColor = vec4(mix(backgroundColor, texColor.rgb, texColor.a), 1.0);
+                }
+            }
+        `);
+        gl.compileShader(fragmentShader);
+
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        const vertices = new Float32Array([-1, -1, -1, 1, 1, 1, -1, -1, 1, 1, 1, -1]);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+        const position = gl.getAttribLocation(program, 'position');
+        gl.enableVertexAttribArray(position);
+        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+
+        const uMouse = gl.getUniformLocation(program, 'uMouse');
+        const uTime = gl.getUniformLocation(program, 'uTime');
+        const uTexture = gl.getUniformLocation(program, 'uTexture');
+        const uResolution = gl.getUniformLocation(program, 'uResolution');
+        const uImageAspect = gl.getUniformLocation(program, 'uImageAspect');
+
+        loadImage('PresentFuturesLogoTransparent.png').then(image => {
+            const texture = createTexture(image);
+            
+            function animate(time) {
+                mouseX += (targetMouseX - mouseX) * 0.1;
+                mouseY += (targetMouseY - mouseY) * 0.1;
+
+                gl.uniform2f(uMouse, mouseX, mouseY);
+                gl.uniform1f(uTime, time * 0.001);
+                gl.uniform2f(uResolution, canvas.width, canvas.height);
+                gl.uniform1f(uImageAspect, imageAspectRatio);
+                
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.uniform1i(uTexture, 0);
+                
+                gl.drawArrays(gl.TRIANGLES, 0, 20);
+                requestAnimationFrame(animate);
+            }
+            requestAnimationFrame(animate);
+        });
+    </script>
+</body>
+</html>
